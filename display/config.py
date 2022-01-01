@@ -1,15 +1,33 @@
 import os
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 
+DIRECTIONS = ['UP', 'DOWN', 'LEFT', 'RIGHT']
+EXIT_STRING = 'Q'
+
+KEY_MAPPING = {
+    0: {
+        'UP': 'UP', 'DOWN': 'DOWN',
+        'LEFT': 'LEFT', 'RIGHT': 'RIGHT'
+    },
+    1: {
+        'W': 'UP', 'S': 'DOWN',
+        'A': 'LEFT', 'D': 'RIGHT'
+    }
+}
+
+PLAYER_NAMES = ['Mozart', 'DongDong', 'JunJun']
+
+
+#############################
+#        style section
+#############################
 WINDOW_X, WINDOW_Y = 1120, 120
 os.environ['SDL_VIDEO_WINDOW_POS'] = "%d,%d" % (WINDOW_X, WINDOW_Y)
 WINDOW_SIZE = (768, 768)
 EDGE_PERCENTAGE = 0.16
 
-DIRECTIONS = ['UP', 'DOWN', 'LEFT', 'RIGHT']
-EXIT_STRING = 'Q'
-
-FONT, BLOCK_FONT_SIZE = 'papyrus', 60
+FONT = 'papyrus'
+BLOCK_FONT, BLOCK_FONT_SIZE = 'papyrus', 60
 STATUS_FONT_SIZE = 24
 MSG_FONT_SIZE = 32
 
@@ -38,11 +56,3 @@ BLOCK_SETUP = {
 }
 MSG_FONT_COLOR = (61, 97, 124)
 ACTIVE_FONT_COLOR = (124, 97, 61)
-
-PLAYER_NAMES = ['Mozart', 'DongDong', 'JunJun']
-
-def colorFlip(xRgbColor,xId=0):
-    if xId == 1:
-        return (xRgbColor[1], xRgbColor[0], xRgbColor[2])
-    return xRgbColor
-

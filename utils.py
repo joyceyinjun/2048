@@ -1,5 +1,4 @@
 import sys
-
 sys.path += ['./game', './display']
 
 from collections import Counter
@@ -8,73 +7,7 @@ import pandas as pd
 from display import *
 from board import *
 from player import *
-
-
-class Game:
-    def __init__(self, xPlayers, xSize=2):
-        self.board = Board(xSize, xSize)
-        self.players = xPlayers
-        self.current_player_id = 0
-        self.available_moves = None
-        self.isAlive = None
-
-        # initiate board with number of blocks equal to number of players
-        for player in xPlayers:
-            flag = False
-            while not flag:
-                flag = self.board.populate(xPlayerId=player.id)
-        self.updateStatus()
-
-    def updateStatus(self):
-        self.available_moves = self.board.isAlive(xReturnMoves=True)
-        self.isAlive = len(self.available_moves) > 0
-
-    def updatePlayer(self):
-        self.current_player_id = (self.current_player_id + 1) % len(self.players)
-
-    def next(self):
-        move = self.players[self.current_player_id].generateValidMove(self.available_moves)
-        board_move = self.board.collapseTo(move)
-        self.updatePlayer()
-        self.board.populate(self.current_player_id)
-        self.updateStatus()
-
-    def play(self):
-        while self.isAlive:
-            self.next()
-
-
-class GameDisplay:
-    """
-    GAME DISPLAY
-    """
-
-    def __init__(self, xScreen, xGame):
-        self.screen = xScreen
-        self.game = xGame
-        if self.screen:
-            self.board_display = BoardDisplay(self.screen, self.game.board)
-
-    def showAndWait(self, xShowBoard=True, xWaitKey=False):
-        if xShowBoard:
-            self.board_display.drawBoard()
-            self.board_display.showStatus(self.game.players,self.game.current_player_id)
-            self.screen.pygame.display.flip()
-        if xWaitKey:
-            return self.screen.getKey()
-
-    def end(self, xGameOver=True):
-        if xGameOver:
-            self.showAndWait(xShowBoard=True, xWaitKey=False)
-            self.board_display.screen.displayMessage(
-                xMessage='GAME OVER',
-                xFont=FONT,
-                xFontColor=MSG_FONT_COLOR,
-                xFontSize=MSG_FONT_SIZE,
-                xCenter=self.board_display.width *2 / 5,
-                yCenter=self.board_display.edge_y / 2
-            )
-            self.screen.pygame.display.flip()
+from game import *
 
 
 class GameRoom:
@@ -82,14 +15,16 @@ class GameRoom:
     GAMEROOM
     """
 
-    def __init__(self, xSize=4):
+    def __init__(self, xSize=4, xQC=False, xBoard=None):
         self.screen = Screen()
         self.size_of_board = xSize
         self.player_options = []
         self.players = []
 
+        self.board = xBoard
         self.game = None
         self.game_display = None
+        self.qc = xQC
 
     def openScreen(self):
         self.screen.clearScreen()
@@ -102,7 +37,12 @@ class GameRoom:
             yCenter=self.screen.height * 2 / 7
         )
         self.screen.pygame.display.flip()
-        num_players = int(self.screen.getKey())
+
+        key = ''
+        while key not in ('1','2'):
+            key = self.screen.getKey()
+        num_players = int(key)
+
         self.player_options = []
         cnt = 1
         while cnt <= num_players:
@@ -169,15 +109,35 @@ class GameRoom:
         for i, player_option in enumerate(self.player_options):
             if player_option == '0':
                 self.players.append(
-                    ComputerPlayer(self.screen, PLAYER_NAMES[i], i)
+                    SmartPlayer(
+                        xScreen=self.screen,
+                        xName=PLAYER_NAMES[i],
+                        xId=i,
+                        xQC=self.qc
+                    )
                 )
             else:
                 self.players.append(
-                    HumanPlayer(self.screen, PLAYER_NAMES[i], i)
+                    HumanPlayer(
+                        xScreen=self.screen,
+                        xName=PLAYER_NAMES[i],
+                        xId=i
+                    )
                 )
 
+        # initiate board if not given
+        if not self.board:
+            self.board = Board(self.size_of_board, self.size_of_board)
+            for player in self.players:
+                flag = False
+                while not flag:
+                    flag = self.board.populate(xPlayerId=player.id)
         # initiate game
-        self.game = Game(xPlayers=self.players, xSize=self.size_of_board)
+        self.game = Game(
+            xBoard=self.board,
+            xPlayers=self.players,
+            xCurrentPlayerId=0
+        )
 
         # initiate game display
         self.game_display = GameDisplay(self.screen, self.game)

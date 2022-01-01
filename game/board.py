@@ -1,23 +1,16 @@
-import sys
 import random
+import copy
+from config import DIRECTIONS
 
-from config import *
 
 class Block:
     """
     BLOCK
     """
 
-    def __init__(self, xValue, xPlayerId):
+    def __init__(self, xValue, xPlayerId=0):
         self.value = xValue
         self.player_id = xPlayerId
-        self.font_size = int(BLOCK_SETUP[self.value][1] * BLOCK_FONT_SIZE)
-        self.font_color = colorFlip(BLOCK_SETUP[self.value][0],self.player_id)
-        self.block_color = colorFlip(BLOCK_SETUP[self.value][2],self.player_id)
-
-    def updateColors(self):
-        self.font_color = colorFlip(BLOCK_SETUP[self.value][0],self.player_id)
-        self.block_color = colorFlip(BLOCK_SETUP[self.value][2],self.player_id)
 
     def __str__(self):
         return '<Block {}>'.format(self.value)
@@ -37,19 +30,23 @@ class Board:
         self.Ny = xNy
         self.isEmpty = True
         self.occupied = {}
-        self.unoccupied = [(x + 1, y + 1) for x in range(self.Nx) for y in range(self.Ny)]
+        self.unoccupied = [(x + 1, y + 1)
+                           for x in range(self.Nx)
+                           for y in range(self.Ny)]
+        self.available_moves = None
 
     def clearBoard(self):
         self.occupied = {}
         self.isEmpty = True
 
-    def getTotalScore(self, xPlayerId):
-        total_score = 0
+    def getPlayerStatus(self, xPlayerId):
+        total_score, num_blocks = 0, 0
         for location in self.occupied.keys():
             block = self.occupied[location]
             if block.player_id == xPlayerId:
                 total_score += block.value
-        return total_score
+                num_blocks += 1
+        return total_score, num_blocks
 
     def isOccupied(self, xX, xY):
         if self.isEmpty:
@@ -174,6 +171,22 @@ class Board:
         if not xReturnMoves:
             return False
         return availableMoves
+
+    def updateStatus(self):
+        self.available_moves = self.isAlive(xReturnMoves=True)
+
+    def getNextStepValues(self, xCurrentPlayerId):
+        self.updateStatus()
+        if len(self.available_moves) == 0:
+            return None
+
+        value_function = {}
+        for move in self.available_moves:
+            board_cp = copy.deepcopy(self)
+            board_cp.collapseTo(move)
+            value_function[move] = board_cp.getPlayerStatus(xCurrentPlayerId)
+
+        return value_function
 
     def __str__(self):
         if self.isEmpty:
