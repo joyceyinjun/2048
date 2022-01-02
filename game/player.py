@@ -1,8 +1,8 @@
 import sys
+import random
 
 sys.path += ['../display']
-import random
-from config import KEY_MAPPING
+from config import KEY_MAPPING, UNDO_STRING
 
 
 def sampleFromList(xList):
@@ -19,21 +19,22 @@ class Player:
 
 class HumanPlayer(Player):
     def __init__(self, xScreen, xName='Dongdong', xId=0):
-        Player.__init__(self, xScreen, xName, xId)
+        super().__init__(xScreen, xName, xId)
 
     def generateValidMove(self, xBoard):
         available_moves = xBoard.available_moves
         if not isinstance(available_moves, list) or len(available_moves) == 0:
             return None
+
         move = ''
-        while move not in available_moves:
+        while move not in available_moves and move != UNDO_STRING:
             move = KEY_MAPPING[self.id].get(self.screen.getKey(), None)
         return move
 
 
 class ComputerPlayer(Player):
     def __init__(self, xScreen=None, xName='Mozart', xId=0, xQC=False):
-        Player.__init__(self, xScreen, xName, xId, xQC)
+        super().__init__(xScreen, xName, xId, xQC)
 
     def wait(self, xWaitKey):
         if self.screen:
@@ -52,7 +53,7 @@ class ComputerPlayer(Player):
 
 class SmartPlayer(ComputerPlayer):
     def __init__(self, xScreen=None, xName='Junjun', xId=0, xQC=False):
-        ComputerPlayer.__init__(self, xScreen, xName, xId, xQC)
+        super().__init__(xScreen, xName, xId, xQC)
 
     def generateValidMove(self, xBoard):
         value_function = xBoard.getNextStepValues(self.id)

@@ -1,8 +1,10 @@
+import copy
 import sys
 sys.path += ['./game', './display']
 
 from collections import Counter
 import pandas as pd
+import time
 
 from display import *
 from board import *
@@ -16,15 +18,33 @@ class GameRoom:
     """
 
     def __init__(self, xSize=4, xQC=False, xBoard=None):
+        self.board = xBoard
+        if xBoard:
+            self.size_of_board = xBoard.Nx
+        else:
+            self.size_of_board = xSize
+
         self.screen = Screen()
-        self.size_of_board = xSize
         self.player_options = []
         self.players = []
 
-        self.board = xBoard
         self.game = None
         self.game_display = None
         self.qc = xQC
+
+    def clearBoard(self):
+        self.board = None
+
+    def initBoard(self):
+        self.board = Board(self.size_of_board)
+        num_blocks = max(2, len(self.players))
+        for i in range(num_blocks):
+            i_wrap = i % len(self.players)
+            flag = False
+            while not flag:
+                flag = self.board.populate(
+                    xPlayerId=self.players[i_wrap].id
+                )
 
     def openScreen(self):
         self.screen.clearScreen()
@@ -43,33 +63,26 @@ class GameRoom:
             key = self.screen.getKey()
         num_players = int(key)
 
+        self.screen.displayMessage(
+            xMessage='PRESS 0: machine / OTHER: human',
+            xFont=FONT,
+            xFontColor=MSG_FONT_COLOR,
+            xFontSize=MSG_FONT_SIZE - 4,
+            xCenter=self.screen.width / 2,
+            yCenter=self.screen.height * 3 / 7
+        )
+
         self.player_options = []
         cnt = 1
         while cnt <= num_players:
-            self.screen.clearScreen()
+            # self.screen.clearScreen()
             self.screen.displayMessage(
-                xMessage='SELECT PLAYER - {}'.format(cnt),
+                xMessage='SELECT PLAYER - {} ...'.format(cnt),
                 xFont=FONT,
                 xFontColor=MSG_FONT_COLOR,
-                xFontSize=MSG_FONT_SIZE + 4,
+                xFontSize=MSG_FONT_SIZE,
                 xCenter=self.screen.width / 2,
-                yCenter=self.screen.height * 2 / 7
-            )
-            self.screen.displayMessage(
-                xMessage='0: MACHINE',
-                xFont=FONT,
-                xFontColor=MSG_FONT_COLOR,
-                xFontSize=MSG_FONT_SIZE - 4,
-                xCenter=self.screen.width / 2,
-                yCenter=self.screen.height * 3 / 7
-            )
-            self.screen.displayMessage(
-                xMessage='other: HUMAN',
-                xFont=FONT,
-                xFontColor=MSG_FONT_COLOR,
-                xFontSize=MSG_FONT_SIZE - 4,
-                xCenter=self.screen.width / 2,
-                yCenter=self.screen.height * 4 / 7
+                yCenter=self.screen.height * (cnt+3) / 7
             )
             self.screen.pygame.display.flip()
             cnt += 1
@@ -125,13 +138,10 @@ class GameRoom:
                     )
                 )
 
-        # initiate board if not given
+        # initiate board
         if not self.board:
-            self.board = Board(self.size_of_board, self.size_of_board)
-            for player in self.players:
-                flag = False
-                while not flag:
-                    flag = self.board.populate(xPlayerId=player.id)
+            self.initBoard()
+
         # initiate game
         self.game = Game(
             xBoard=self.board,
@@ -159,6 +169,7 @@ class GameRoom:
             self.stage()
             self.play()
             play_again = self.interScreen()
+            self.clearBoard()
         self.endScreen()
 
 
@@ -169,8 +180,8 @@ class BatchPlayer:
 
     def __init__(self, xSizeOfBoard, xNumRounds):
         self.players = [
-            ComputerPlayer(xName='Mozart', xId=0),
-            # ComputerPlayer(xName='DongDong', xId=1),
+            SmartPlayer(xName='Mozart', xId=0),
+            SmartPlayer(xName='DongDong', xId=1),
         ]
         self.size_of_board = xSizeOfBoard
         self.num_rounds = xNumRounds
@@ -178,12 +189,32 @@ class BatchPlayer:
         for i in range(len(self.players)):
             self.scores[i] = []
 
+    def initBoard(self):
+        board = Board(self.size_of_board)
+        num_blocks = max(2, len(self.players))
+        for i in range(num_blocks):
+            i_wrap = i % len(self.players)
+            flag = False
+            while not flag:
+                flag = board.populate(
+                    xPlayerId=self.players[i_wrap].id
+                )
+        return board
+
     def run(self):
-        for _ in range(self.num_rounds):
-            game = Game(xPlayers=self.players, xSize=self.size_of_board)
+        start_time = time.time()
+        for k in range(self.num_rounds):
+            board = self.initBoard()
+            game = Game(xBoard=board, xPlayers=self.players)
             game.play()
             for i in range(len(self.players)):
-                self.scores[i].append(game.board.getTotalScore(i))
+                score, _ = game.board.getPlayerStatus(i)
+                self.scores[i].append(score)
+            # console print
+            if (k + 1) % 10 == 0:
+                print('games played: {}'.format(k + 1))
+                print('elapsed time: {:.3f} seconds'.format(time.time() - start_time))
+                start_time = time.time()
 
     def getAverageScores(self):
         scores_avg = {}

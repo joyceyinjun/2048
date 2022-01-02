@@ -24,10 +24,9 @@ class Board:
     BOARD
     """
 
-    def __init__(self, xNx, xNy):
-        assert xNx == xNy, "Value Error in board init"
-        self.Nx = xNx
-        self.Ny = xNy
+    def __init__(self, xN):
+        self.Nx = xN
+        self.Ny = xN
         self.isEmpty = True
         self.occupied = {}
         self.unoccupied = [(x + 1, y + 1)

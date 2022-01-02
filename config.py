@@ -3,15 +3,18 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 
 DIRECTIONS = ['UP', 'DOWN', 'LEFT', 'RIGHT']
 EXIT_STRING = 'Q'
+UNDO_STRING = 'U'
 
 KEY_MAPPING = {
     0: {
         'UP': 'UP', 'DOWN': 'DOWN',
-        'LEFT': 'LEFT', 'RIGHT': 'RIGHT'
+        'LEFT': 'LEFT', 'RIGHT': 'RIGHT',
+        'U': 'U'
     },
     1: {
         'W': 'UP', 'S': 'DOWN',
-        'A': 'LEFT', 'D': 'RIGHT'
+        'A': 'LEFT', 'D': 'RIGHT',
+        'U': 'U'
     }
 }
 

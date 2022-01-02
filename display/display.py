@@ -182,11 +182,11 @@ class GameDisplay:
     def __init__(self, xScreen, xGame):
         self.screen = xScreen
         self.game = xGame
-        if self.screen:
-            self.board_display = BoardDisplay(self.screen, self.game.board)
+        self.board_display = None
 
     def showAndWait(self, xShowBoard=True, xWaitKey=False):
         if xShowBoard:
+            self.board_display = BoardDisplay(self.screen, self.game.board)
             self.board_display.drawBoard()
             self.board_display.showStatus(self.game.players, self.game.current_player_id)
             self.screen.pygame.display.flip()
