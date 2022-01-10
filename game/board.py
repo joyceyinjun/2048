@@ -34,6 +34,36 @@ class Board:
                            for y in range(self.Ny)]
         self.available_moves = None
 
+    def __str__(self):
+        if self.isEmpty:
+            return '<Board Empty>'
+        ans = '<Board '
+        for x, y in self.occupied.keys():
+            ans += '[{} at ({},{})], '.format(self.occupied[(x, y)], x, y)
+        ans = ans[:-2] + '>'
+        return ans
+
+    def getSnapshot(self, xPlayer=True, xSimpleFormat=True):
+        snapshot = []
+        for y in range(self.Ny):
+            for x in range(self.Nx):
+                if (x+1, y+1) in self.unoccupied:
+                    block = None
+                    value, player_id = 0, -1
+                else:
+                    block = self.occupied[(x + 1, y + 1)]
+                    value, player_id = block.value, block.player_id
+
+                if not xSimpleFormat:
+                    value = block
+                if xPlayer:
+                    sample = [(value, player_id)]
+                else:
+                    sample = [value]
+
+                snapshot += sample
+        return snapshot
+
     def clearBoard(self):
         self.occupied = {}
         self.isEmpty = True
@@ -187,12 +217,23 @@ class Board:
 
         return value_function
 
-    def __str__(self):
-        if self.isEmpty:
-            return '<Board Empty>'
-        ans = '<Board '
-        for x, y in self.occupied.keys():
-            ans += '[{} at ({},{})], '.format(self.occupied[(x, y)], x, y)
-        ans = ans[:-2] + '>'
-        return ans
+    def compareWith(self, xOtherBoard):
+        if self.getSnapshot() == xOtherBoard.getSnapshot():
+            return 0
+        cp = copy.deepcopy(self)
+        for i in range(1,4):
+            cp.rotate(1)
+            if cp.getSnapshot() == xOtherBoard.getSnapshot():
+                return i
+        return -1
 
+    def initForGame(self,xPlayers):
+        self.clearBoard()
+        num_blocks = max(2, len(xPlayers))
+        for i in range(num_blocks):
+            i_wrap = i % len(xPlayers)
+            flag = False
+            while not flag:
+                flag = self.populate(
+                    xPlayerId=xPlayers[i_wrap].id
+                )

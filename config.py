@@ -1,7 +1,7 @@
 import os
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 
-DIRECTIONS = ['UP', 'DOWN', 'LEFT', 'RIGHT']
+DIRECTIONS = ['UP', 'RIGHT', 'DOWN', 'LEFT']
 EXIT_STRING = 'Q'
 UNDO_STRING = 'U'
 
