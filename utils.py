@@ -2,61 +2,10 @@ import copy
 import sys
 sys.path += ['./game', './display']
 
-from collections import Counter
-import pandas as pd
-import time
-import pickle
-import boto3
-from functools import wraps
-
 from display import *
 from board import *
 from player import *
 from game import *
-
-BUCKET = 'zeno-of-elea'
-
-def myTimer(func, taskName=None):
-    def wrapper_function(*args, **kwargs):
-        start_time = time.time()
-        func(*args,  **kwargs)
-        print('{} elapsed time: {:.2f} seconds'.format(taskName, time.time()-start_time))
-    return wrapper_function
-
-def saveToPickle(xContent, xFileName, xBucket=BUCKET):
-    pickle_obj = pickle.dumps(xContent)
-    s3_resource = boto3.resource('s3')
-    s3_resource.Object(xBucket, xFileName).put(Body=pickle_obj)
-
-def loadFromPickle(xFileName,xBucket=BUCKET):
-    s3_resource = boto3.resource('s3')
-    pickle_obj = s3_resource.Bucket(xBucket).Object(xFileName).get()['Body'].read()
-    return pickle.loads(pickle_obj)
-
-def compareStates(xState0, xState1):
-    a,b,c,d = xState0
-    if [a,b,c,d] == xState1:
-        return 0
-    if [c,a,d,b] == xState1:
-        return 1
-    if [d,c,b,a] == xState1:
-        return 2
-    if [b,d,a,c] == xState1:
-        return 3
-    return -1
-
-def rotateAction(xAction, xRotation):
-    return DIRECTIONS[(
-        DIRECTIONS.index(xAction)+xRotation
-      )%len(DIRECTIONS)]
-
-def compareStateActionPair(xPair0, xPair1):
-    state0, action0 = xPair0
-    state1, action1 = xPair1
-    rotation = compareStates(state0, state1)
-    if rotateAction(action0, rotation) == action1:
-        return True
-    return False
 
 
 class GameRoom:
@@ -211,66 +160,6 @@ class GameRoom:
             play_again = self.interScreen()
             self.clearBoard()
         self.endScreen()
-
-
-class BatchPlayer:
-    """
-    BATCHPLAYER
-    """
-
-    def __init__(self, xPlayers, xSizeOfBoard, xNumRounds):
-        self.players = xPlayers
-        print('number of players:', len(self.players))
-        self.size_of_board = xSizeOfBoard
-        self.num_rounds = xNumRounds
-        self.recordings = []
-        # self.scores = {}
-        # for i in range(len(self.players)):
-        #     self.scores[i] = []
-
-    def recordScores(self, xGame):
-        for i in range(len(self.players)):
-            score, _ = xGame.board.getPlayerStatus(i)
-            self.scores[i].append(score)
-
-    def recordGame(self, xGame):
-        self.recordings.append(xGame.recording)
-
-    def run(self):
-        print('start playing {} games'.format(self.num_rounds))
-        start_time = time.time()
-        for k in range(self.num_rounds):
-            board = Board(self.size_of_board)
-            board.initForGame(self.players)
-            game = Game(xBoard=board, xPlayers=self.players,
-                        xRecordGame=True)
-            game.play()
-            self.recordGame(game)
-            # self.recordScores(game)
-            if (k + 1) % 5000 == 0:
-                print('games played: {}'.format(k + 1))
-                print('elapsed time: {:.3f} seconds'.format(time.time() - start_time))
-                start_time = time.time()
-
-    def getAverageScores(self):
-        scores_avg = {}
-        for i in range(len(self.players)):
-            scores_avg[self.players[i].name] = sum(self.scores[i])
-            scores_avg[self.players[i].name] /= self.num_rounds
-        return pd.DataFrame(scores_avg, index=['Average Score'])
-
-    def getScoreDistribution(self):
-        counts = []
-        for i in range(len(self.scores)):
-            counts.append(Counter(self.scores[i]))
-
-        df = pd.DataFrame(counts).transpose().sort_index().rename(
-            columns={z.id: z.name for z in self.players}
-        ).fillna(0).astype(int)
-        df.index_name = 'score'
-
-        return df
-
 
 class QC:
     def __init__(self,xBoard):
