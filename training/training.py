@@ -6,95 +6,28 @@ sys.path += ['../game']
 from collections import Counter
 import numpy as np
 import pandas as pd
+import ast
 import time
-import pickle
-import boto3
 
 from board import *
 from player import *
 from game import *
-
-BUCKET = 'zeno-of-elea'
-
-
-class BatchPlayer:
-    """
-    BATCHPLAYER
-    """
-
-    def __init__(self, xPlayers, xSizeOfBoard, xQValues, xNumRounds):
-        self.players = xPlayers
-        self.size_of_board = xSizeOfBoard
-        self.q_values = xQValues
-        self.num_rounds = xNumRounds
-        self.recordings = []
-
-    def recordScores(self, xGame):
-        for i in range(len(self.players)):
-            score, _ = xGame.board.getPlayerStatus(i)
-            self.scores[i].append(score)
-
-    def recordGame(self, xGame):
-        self.recordings.append(xGame.recording)
-
-    def run(self):
-        start_time = time.time()
-        for k in range(self.num_rounds):
-            board = Board(self.size_of_board)
-            board.initForGame(self.players)
-            game = Game(xBoard=board, xPlayers=self.players,
-                        xQValues=self.q_values,
-                        xRecordGame=True)
-            game.play()
-            self.recordGame(game)
-            # self.recordScores(game)
-            # if (k + 1) % 5000 == 0:
-            #     print('games played: {}'.format(k + 1))
-            #     print('elapsed time: {:.3f} seconds'.format(time.time() - start_time))
-            #     start_time = time.time()
-
-    def getAverageScores(self):
-        scores_avg = {}
-        for i in range(len(self.players)):
-            scores_avg[self.players[i].name] = sum(self.scores[i])
-            scores_avg[self.players[i].name] /= self.num_rounds
-        return pd.DataFrame(scores_avg, index=['Average Score'])
-
-    def getScoreDistribution(self):
-        counts = []
-        for i in range(len(self.scores)):
-            counts.append(Counter(self.scores[i]))
-
-        df = pd.DataFrame(counts).transpose().sort_index().rename(
-            columns={z.id: z.name for z in self.players}
-        ).fillna(0).astype(int)
-        df.index_name = 'score'
-
-        return df
-
-
-class FileHandler:
-    @staticmethod
-    def saveToPickle( xContent, xFileName, xBucket=BUCKET):
-        pickle_obj = pickle.dumps(xContent)
-        s3_resource = boto3.resource('s3')
-        s3_resource.Object(xBucket, xFileName).put(Body=pickle_obj)
-
-    @staticmethod
-    def loadFromPickle(xFileName, xBucket=BUCKET):
-        s3_resource = boto3.resource('s3')
-        pickle_obj = s3_resource.Bucket(xBucket).Object(xFileName).get()['Body'].read()
-        return pickle.loads(pickle_obj)
+from utils import FileHandler, BatchPlayer
 
 
 class Trainer:
-    def __init__(self, xNumPlayers,
-                 xSizeOfBoard, xNumGames, xQC=False):
+    def __init__(self, xTag, xNumPlayers,
+                 xSizeOfBoard, xNumGames,
+                 xTotalEpoch, xStartEpoch=1,
+                 xQC=False):
+        self.tag = xTag
         self.num_players = xNumPlayers
         self.size_of_board = xSizeOfBoard
         self.num_games = xNumGames
         self.QC = xQC
-        self.epoch = 0
+        self.epoch = xStartEpoch
+        self.epoch_total = xTotalEpoch
+        self.memory_decay = 0.9
 
         self.game_recordings = None
         self.q_values, self.q_values_delta = None, None
@@ -103,8 +36,8 @@ class Trainer:
         self.q_values_file_name = None
 
     def updateFileNames(self):
-        file_prefix = 'misc/rl/{}x{}_{}'.format(
-                self.size_of_board, self.size_of_board,
+        file_prefix = 'misc/rl/{}_{}x{}_{}'.format(
+                self.tag, self.size_of_board, self.size_of_board,
                 self.num_games)
         file_suffix = 'ep{:04d}.pkl'.format(self.epoch)
         self.game_recordings_file_name = '{}/recordings/{}'.format(
@@ -118,12 +51,12 @@ class Trainer:
         """
         batch play mode
         """
-        self.epoch += 1
         self.updateFileNames()
 
         players = []
         for i in range(self.num_players):
-            players.append(ComputerPlayer(xId=i))
+            players.append(LearnedPlayer(xId=i)
+                           )
 
         batch_player = BatchPlayer(players, self.size_of_board,
                                    self.q_values,
@@ -132,6 +65,8 @@ class Trainer:
         self.game_recordings = batch_player.recordings
         self.file_handler.saveToPickle(self.game_recordings,
                                 self.game_recordings_file_name)
+
+        self.epoch += 1
         if self.QC:
             print('saved {} recordings to {}'.format(
                 len(self.game_recordings), self.game_recordings_file_name
@@ -185,8 +120,8 @@ class Trainer:
                 count, value = self.q_values[key]
                 count_delta, value_delta = self.q_values_delta[key]
                 self.q_values[key] = [
-                            count/2+count_delta,
-                            value/2+value_delta
+                            count*self.memory_decay+count_delta,
+                            value*self.memory_decay+value_delta
                             ]
 
         self.file_handler.saveToPickle(self.q_values,
@@ -197,32 +132,59 @@ class Trainer:
             """.format(len(self.q_values),self.q_values_file_name))
 
     def execute(self):
-        self.playGames()
-        self.getCurrentQValues()
-        self.updateQValues()
+        while self.epoch <= self.epoch_total:
+            self.playGames()
+            self.getCurrentQValues()
+            self.updateQValues()
 
-    def check(self, xEpoch):
-        self.epoch = xEpoch
-        self.updateFileNames()
+    def checkStats(self, xEpochs):
+        print('epoch | episode length avg | std')
+        print('-'*40)
+        for epoch in xEpochs:
+            self.epoch = epoch
+            self.updateFileNames()
+            self.game_recordings = self.file_handler.loadFromPickle(
+                                self.game_recordings_file_name)
+            lengths = np.array([
+                len(recording) for recording in self.game_recordings
+            ])
 
-        self.q_values = self.file_handler.loadFromPickle(
-            self.q_values_file_name
-        )
-        if self.QC:
-            print('loaded state values from {}'.format(
-                self.q_values_file_name
+            print('{:6s} | {:.3f} | {:.3f} '.format(
+                str(self.epoch), np.average(lengths), np.std(lengths)
             ))
-        state = str(tuple([0,1,2,1]))
 
-        print('{:30s} | q-value |  # experiments'.format('state-action pair'))
-        print('-'*60)
-        q_values, actions  = [], []
-        for state_action in self.q_values.keys():
-            # print(state_action, self.q_values[state_action])
-            if state_action[0] == state:
-                count_sa, value_sa = self.q_values[state_action]
-                q_values.append(value_sa/count_sa)
-                actions.append(state_action[1])
-                print('{:30s} |  {:.3f}  | {:.2f} '.format(
-                          str(state_action), value_sa/count_sa, count_sa
+    def checkState(self, xEpochs, xState=None):
+        cnt = 0
+        for epoch in xEpochs:
+            self.epoch = epoch
+            self.updateFileNames()
+
+            self.q_values = self.file_handler.loadFromPickle(
+                self.q_values_file_name
+            )
+            if self.QC:
+                print('loaded state values from {}'.format(
+                    self.q_values_file_name
                 ))
+
+            if xState is None:
+                xState = random.sample(self.q_values.keys(),1)[0][0]
+            if cnt == 0:
+                print('target state')
+                print(np.asarray(ast.literal_eval(xState)).reshape(self.size_of_board,-1))
+
+            print('{:20s} | q-value |  # experiments'.format('action'))
+            print('-'*60)
+            q_values, actions  = [], []
+
+            for state_action in self.q_values.keys():
+                # print(state_action, self.q_values[state_action])
+                if state_action[0] == xState:
+                    count_sa, value_sa = self.q_values[state_action]
+                    q_values.append(value_sa/count_sa)
+                    actions.append(state_action[1])
+                    print('{:20s} |  {:.3f}  | {:.2f} '.format(
+                              str(state_action[1]), value_sa/count_sa, count_sa
+                    ))
+            print('\n')
+            cnt += 1

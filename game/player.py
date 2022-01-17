@@ -1,8 +1,9 @@
 import sys
+sys.path += ['../display']
+
 import random
 import numpy as np
 
-sys.path += ['../display']
 from config import KEY_MAPPING, UNDO_STRING
 
 
@@ -47,10 +48,60 @@ class ComputerPlayer(Player):
         assert len(xList) == len(xExpectedReturn) and \
                len(xList) == len(xConfidence), "INPUT DATA FORMAT INCONSISTENT"
         samples = ([np.random.normal(
-            loc=r, scale=1 / np.sqrt(xConfidence[i]))
+            loc=r, scale=.1 / np.sqrt(xConfidence[i]))
             for i, r in enumerate(xExpectedReturn)
         ])
         return xList[np.argmax(samples)]
+
+    def generateValidMove(self):
+        pass
+
+
+class RandomPlayer(ComputerPlayer):
+    def __init__(self, xScreen=None, xName='Mozart', xId=0, xQC=False):
+        super().__init__(xScreen, xName, xId, xQC)
+
+    def generateValidMove(self, xBoard, xQValues=None):
+        self.wait(self.qc)
+        available_moves = xBoard.available_moves
+        if not available_moves:
+            return None
+        return self.sampleFromList(available_moves)
+
+
+class GreedyPlayer(ComputerPlayer):
+    def __init__(self, xScreen=None, xName='Junjun', xId=0, xQC=False):
+        super().__init__(xScreen, xName, xId, xQC)
+
+    def generateValidMove(self, xBoard, xQValues=None):
+        value_function = xBoard.getNextStepValues(self.id)
+        if not value_function:
+            return None
+
+        top_moves = []
+        max_value, min_num_blocks = 0, xBoard.Nx * xBoard.Ny
+
+        for key in value_function:
+            if (value_function[key][0] > max_value) or \
+                    (value_function[key][0] == max_value and
+                     value_function[key][1] < min_num_blocks):
+                top_moves = [key]
+                max_value, min_num_blocks = value_function[key]
+            elif value_function[key][0] == max_value and \
+                    value_function[key][1] == min_num_blocks:
+                top_moves.append(key)
+
+        if self.qc:
+            print('values', value_function)
+            print('moves', top_moves)
+        self.wait(xWaitKey=self.qc)
+
+        return self.sampleFromList(top_moves)
+
+
+class LearnedPlayer(ComputerPlayer):
+    def __init__(self, xScreen=None, xName='Mozart', xId=0, xQC=False):
+        super().__init__(xScreen, xName, xId, xQC)
 
     @staticmethod
     def getStateQValues(xState, xActions, xQValues):
@@ -77,33 +128,3 @@ class ComputerPlayer(Player):
                         current_state, available_moves, xQValues)
         return self.sampleFromList(available_moves,
                               expected_return, confidence)
-
-
-class GreedyPlayer(ComputerPlayer):
-    def __init__(self, xScreen=None, xName='Junjun', xId=0, xQC=False):
-        super().__init__(xScreen, xName, xId, xQC)
-
-    def generateValidMove(self, xBoard):
-        value_function = xBoard.getNextStepValues(self.id)
-        if not value_function:
-            return None
-
-        top_moves = []
-        max_value, min_num_blocks = 0, xBoard.Nx * xBoard.Ny
-
-        for key in value_function:
-            if (value_function[key][0] > max_value) or \
-                    (value_function[key][0] == max_value and
-                     value_function[key][1] < min_num_blocks):
-                top_moves = [key]
-                max_value, min_num_blocks = value_function[key]
-            elif value_function[key][0] == max_value and \
-                    value_function[key][1] == min_num_blocks:
-                top_moves.append(key)
-
-        if self.qc:
-            print('values', value_function)
-            print('moves', top_moves)
-        self.wait(xWaitKey=self.qc)
-
-        return self.sampleFromList(top_moves)

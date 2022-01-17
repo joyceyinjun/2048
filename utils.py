@@ -2,10 +2,87 @@ import copy
 import sys
 sys.path += ['./game', './display']
 
-from display import *
+import pandas as pd
+from collections import Counter
+import pickle
+import boto3
+
+# from display import *
 from board import *
 from player import *
 from game import *
+
+
+BUCKET = 'zeno-of-elea'
+
+class FileHandler:
+    @staticmethod
+    def saveToPickle( xContent, xFileName, xBucket=BUCKET):
+        pickle_obj = pickle.dumps(xContent)
+        s3_resource = boto3.resource('s3')
+        s3_resource.Object(xBucket, xFileName).put(Body=pickle_obj)
+
+    @staticmethod
+    def loadFromPickle(xFileName, xBucket=BUCKET):
+        s3_resource = boto3.resource('s3')
+        pickle_obj = s3_resource.Bucket(xBucket).Object(xFileName).get()['Body'].read()
+        return pickle.loads(pickle_obj)
+
+
+class BatchPlayer:
+    """
+    BATCHPLAYER
+    """
+
+    def __init__(self, xPlayers, xSizeOfBoard, xQValues, xNumRounds,
+                xRecord=True):
+        self.players = xPlayers
+        self.size_of_board = xSizeOfBoard
+        self.q_values = xQValues
+        self.num_rounds = xNumRounds
+        self.scores = {player.id: [] for player in self.players}
+        self.record = xRecord
+        if self.record:
+            self.recordings = []
+
+    def updateScores(self, xGame):
+        for i in [player.id for player in self.players]:
+            score, _ = xGame.board.getPlayerStatus(i)
+            self.scores[i].append(score)
+
+    def recordGame(self, xGame):
+        self.recordings.append(xGame.recording)
+
+    def run(self):
+        for k in range(self.num_rounds):
+            board = Board(self.size_of_board)
+            board.initForGame(self.players)
+            game = Game(xBoard=board, xPlayers=self.players,
+                        xQValues=self.q_values,
+                        xRecordGame=True)
+            game.play()
+            self.updateScores(game)
+            if self.record:
+                self.recordGame(game)
+
+    def getAverageScores(self):
+        scores_avg = {}
+        for player in self.players:
+            scores_avg[player.name] = sum(self.scores[player.id])
+            scores_avg[player.name] /= self.num_rounds
+        return pd.DataFrame(scores_avg, index=['Average Score'])
+
+    def getScoreDistribution(self):
+        counts = []
+        for i in range(len(self.scores)):
+            counts.append(Counter(self.scores[i]))
+
+        df = pd.DataFrame(counts).transpose().sort_index().rename(
+            columns={z.id: z.name for z in self.players}
+        ).fillna(0).astype(int)
+        df.index_name = 'score'
+
+        return df
 
 
 class GameRoom:
@@ -160,6 +237,7 @@ class GameRoom:
             play_again = self.interScreen()
             self.clearBoard()
         self.endScreen()
+
 
 class QC:
     def __init__(self,xBoard):

@@ -5,14 +5,9 @@ sys.path += [
     './training']
 
 from collections import Counter
+# from player import *
 from utils import *
 from training import Trainer
-
-
-# class Undo(BaseException):
-#     def __init__(self, xKeyboardInput, xMessage='Undo Exception'):
-#         self.message = 'pressed {}, an {}'.format(xKeyboardInput, xMessage)
-#         super().__init__(self.message)
 
 def unittest():
     """
@@ -33,9 +28,9 @@ def unittest():
 
     player = ComputerPlayer()
     print(board.available_moves)
-    available_moves = ['LEFT','DOWN', 'UP']
-    expected_return = [3.5, 4.2, 4.17]
-    confidence = [50, 40, 40]
+    available_moves = ['LEFT','RIGHT', 'UP']
+    expected_return = [4.2, 4.1, 4.17]
+    confidence = [2, 1, 2]
 
     actions = []
     for _ in range(1000):
@@ -52,38 +47,57 @@ def unittest():
        )
     print(Counter(actions))
 
-#
-# def interactiveplay():
-#     """
-#     interactive mode
-#     """
-#     board = Board(4, 4)
-#     board.occupy(3, 1, Block(xValue=2, xPlayerId=0))
-#     board.occupy(4, 1, Block(xValue=1, xPlayerId=1))
-#     board.occupy(4, 3, Block(xValue=1, xPlayerId=0))
-#     board.occupy(4, 4, Block(xValue=1, xPlayerId=1))
-#
-#     game_room = GameRoom(xSize=3, xQC=False)
-#     game_room.execute()
+
+def interactiveplay():
+    """
+    interactive mode
+    """
+    board = Board(4, 4)
+    board.occupy(3, 1, Block(xValue=2, xPlayerId=0))
+    board.occupy(4, 1, Block(xValue=1, xPlayerId=1))
+    board.occupy(4, 3, Block(xValue=1, xPlayerId=0))
+    board.occupy(4, 4, Block(xValue=1, xPlayerId=1))
+
+    game_room = GameRoom(xSize=3, xQC=False)
+    game_room.execute()
 
 
+def evaluatePlayers():
+    players = [
+        RandomPlayer(xName='Mozart', xId=0),
+        GreedyPlayer(xName='Dongdong', xId=1),
+        # LearnedPlayer(xName='Junjun', xId=0)
+    ]
+
+    # file_name = 'misc/rl/2x2_10000/value_functions/ep0050.pkl'
+    # q_values = FileHandler().loadFromPickle(file_name)
+
+    # batch_player = BatchPlayer(players, 2, q_values, 1000, False)
+    batch_player = BatchPlayer(players, 3, None, 1000, False)
+    batch_player.run()
+    print(batch_player.getScoreDistribution())
+    print(batch_player.getAverageScores())
+
+
+def train():
+    trainer = Trainer(xTag='scale_p1',
+                    xNumPlayers=1,
+                    xSizeOfBoard=2,
+                    xNumGames=5000,
+                    xTotalEpoch=50,
+                    xQC=True)
+
+    # trainer.execute()
+
+    state = str(tuple([0, 1, 2, 1]))
+    # # state = str(tuple([0,0,0,0,1,1,4,8,8]))
+    trainer.checkState(xEpochs=[1,7,49], xState=state)
+    trainer.checkStats([1,7,49])
 
 def main():
-    trainer = Trainer(xNumPlayers=1,
-                      xSizeOfBoard=2,
-                      xNumGames=1000,
-                      xQC=True)
 
-    # for i in range(50):
-    #     print('epoch', i)
-    #     trainer.execute()
+    train()
 
-    trainer.check(xEpoch=1)
-    trainer.check(xEpoch=49)
-
-    # unittest()
-
-    pass
 
 if __name__ == "__main__":
     try:
