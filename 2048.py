@@ -5,9 +5,9 @@ sys.path += [
     './training']
 
 from collections import Counter
-# from player import *
+from player import *
 from utils import *
-from training import Trainer
+from training import Trainer, PolicyEvaluator
 
 def unittest():
     """
@@ -29,8 +29,8 @@ def unittest():
     player = ComputerPlayer()
     print(board.available_moves)
     available_moves = ['LEFT','RIGHT', 'UP']
-    expected_return = [4.2, 4.1, 4.17]
-    confidence = [2, 1, 2]
+    expected_return = [0, 0, 0]
+    confidence = [1, 1, 1]
 
     actions = []
     for _ in range(1000):
@@ -94,10 +94,72 @@ def train():
     trainer.checkState(xEpochs=[1,7,49], xState=state)
     trainer.checkStats([1,7,49])
 
+
 def main():
+    file_name = 'misc/rl/scale_p1_2x2_5000/recordings/ep0001.pkl'
+    peor = PolicyEvaluator([], 2, 5000,
+                xGameRecordingFileName=file_name)
+    vs_mc, vsa_mc = peor.getValueFunctions('mc')
+    vs_td, vsa_td = peor.getValueFunctions('td')
+    df_vsmc = pd.DataFrame(vs_mc,index=['count','value']).transpose()
+    df_vstd = pd.DataFrame(vs_td,index=['count','value']).transpose()
 
-    train()
+    for df in [df_vsmc, df_vstd]:
+        df['state_value'] = df['value']/df['count']
+    cols = ['state_value']
 
+    pd.set_option('display.max_rows',None)
+    pd.set_option('display.max_columns', None)
+    pd.options.display.width = 0
+    print(df_vsmc[cols].join(df_vstd[cols],
+                how='outer',lsuffix='_mc',rsuffix='_td'
+            ).sort_values(by='state_value_mc',
+             ascending=False).head(50))
+
+
+
+
+    # players = [GreedyPlayer(xId=0), RandomPlayer(xId=1)]
+    # peer = PolicyEvaluator(players, 2, 100)
+    # peer.evaluate()
+    # d_greedy = {'state': [],
+    #      'value': [],
+    #      'num_episodes': []
+    #      }
+    # for item in peer.state_values.items():
+    #     d_greedy['state'].append(item[0])
+    #     d_greedy['value'].append(item[1][1]/item[1][0])
+    #     d_greedy['num_episodes'].append(item[1][0])
+    #
+    # df_greedy = pd.DataFrame(d_greedy)
+    # print(df_greedy)
+    #
+    #
+    # players = [RandomPlayer()]
+    # peer = PolicyEvaluator(players, 4, 5000)
+    # peer.evaluate()
+    # d_random = {'state': [],
+    #      'value': [],
+    #      'num_episodes': []
+    #      }
+    # for item in peer.state_values.items():
+    #     d_random['state'].append(item[0])
+    #     d_random['value'].append(item[1][1]/item[1][0])
+    #     d_random['num_episodes'].append(item[1][0])
+    #
+    # df_random = pd.DataFrame(d_random)
+    #
+    # pd.set_option('display.max_rows',None)
+    # pd.set_option('display.max_columns', None)
+    # pd.options.display.width = 0
+    # df = df_greedy.merge(df_random, on='state', how='outer',
+    #     suffixes=('_greedy','_random')
+    #     ) .sort_values(by='value_greedy', ascending=False)
+    #
+
+    # df = pd.read_csv('s3://zeno-of-elea/misc/rl/state_values_2x2_greedy_vs_random_5k_games.csv')
+    # print(df[df.columns[2:]].sum(axis=0)/5000)
+    # print('saved')
 
 if __name__ == "__main__":
     try:

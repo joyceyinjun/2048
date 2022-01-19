@@ -7,7 +7,7 @@ from collections import Counter
 import pickle
 import boto3
 
-# from display import *
+from display import *
 from board import *
 from player import *
 from game import *
@@ -29,16 +29,16 @@ class FileHandler:
         return pickle.loads(pickle_obj)
 
 
-class BatchPlayer:
+class MonteCarloSimulator:
     """
     BATCHPLAYER
     """
 
-    def __init__(self, xPlayers, xSizeOfBoard, xQValues, xNumRounds,
-                xRecord=True):
+    def __init__(self, xPlayers, xQValues, xSizeOfBoard,
+                 xNumRounds, xRecord=True):
         self.players = xPlayers
-        self.size_of_board = xSizeOfBoard
         self.q_values = xQValues
+        self.size_of_board = xSizeOfBoard
         self.num_rounds = xNumRounds
         self.scores = {player.id: [] for player in self.players}
         self.record = xRecord

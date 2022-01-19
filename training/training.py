@@ -2,17 +2,139 @@ import copy
 import sys
 sys.path += ['../game']
 
-
-from collections import Counter
 import numpy as np
-import pandas as pd
 import ast
-import time
 
 from board import *
 from player import *
 from game import *
-from utils import FileHandler, BatchPlayer
+from utils import FileHandler, MonteCarloSimulator
+
+
+class PolicyEvaluator:
+    """
+    evaluate policy using state value function
+
+    policy here can be determined by either
+    1. type of player (random player etc), or
+    2. q-values (which a learned player uses)
+
+    in both these cases, games will be simulated and recorded
+
+    besides, policy can also be evaluated directly from
+    game recordings
+
+    if a q-value file is provided, the player
+    needs to be a ComputerPlayer
+    """
+    def __init__(self, xPlayers, xSizeOfBoard, xNumRounds,
+                 xQValuesFileName=None,
+                 xGameRecordingFileName=None):
+        self.players = xPlayers
+        self.size_of_board = xSizeOfBoard
+        self.num_rounds = xNumRounds
+        if xQValuesFileName is not None:
+            self.q_values = FileHandler().loadFromPickle(xQValuesFileName)
+        else:
+            self.q_values = None
+
+        if xGameRecordingFileName is not None:
+            self.game_episodes = FileHandler().loadFromPickle(xGameRecordingFileName)
+        else:
+            self.game_episodes = None
+
+        self.state_values = None
+        self.state_action_values = None
+
+    def simulate(self):
+        """
+        monte carlo simulate game episodes
+        """
+        mcer = MonteCarloSimulator(
+                self.players, self.q_values, self.size_of_board,
+                self.num_rounds
+        )
+        mcer.run()
+        self.game_episodes = mcer.recordings
+
+    @staticmethod
+    def updateValues(xDictionary, xKey, xValue,
+                     xDictionaryNext=None, xKeyNext=None):
+        """
+        update dictionary with value to key
+        xDictionary entry:
+        {xKey: [xCount, xValue]}
+        """
+        xDictionary.setdefault(xKey, [1e-4, 0])
+        if xKeyNext is None:
+            xDictionary[xKey] = [
+                xDictionary[xKey][0] + 1,
+                xDictionary[xKey][1] + xValue
+            ]
+        else:
+            count_next, value_next = xDictionaryNext.get(xKeyNext, [1e-4, 8e-5])
+            xDictionary[xKey] = [
+                xDictionary[xKey][0] + 1,
+                xDictionary[xKey][1] + xValue + value_next/count_next
+            ]
+
+    def getValueFunctions(self, xMethod,
+                          stateFlag=True,
+                          stateActionFlag=True):
+        """
+        calculate the state value functions
+        from game episodes
+
+        xMethod = mc - monte carlo
+        xMethod = td - temporal difference
+        """
+        state_values, state_action_values = {}, {}
+
+        if xMethod.lower() == 'mc':
+            for episode in self.game_episodes:
+                # monte carlo method
+                # starting from termination of episode
+                value = 0
+                for step in reversed(episode):
+                    # considering one-player game now
+                    # player id discarded
+                    _, state, action, reward, state_next = step
+                    value += reward
+
+                    if stateFlag:
+                        key = str(tuple(state))
+                        self.updateValues(state_values, key, value)
+
+                    if stateActionFlag:
+                        key = (str(tuple(state)), action)
+                        self.updateValues(state_action_values, key, value)
+
+        if xMethod.lower() == 'td':
+            # randomize all steps in all episodes
+            steps = []
+            for episode in self.game_episodes:
+                steps += episode
+            random.seed(87112)
+            random.shuffle(steps)
+            for i, step in enumerate(steps):
+                _, state, action, reward, state_next = step
+                key_next = str(tuple(state_next))
+
+                if stateFlag:
+                    key_current = str(tuple(state))
+                    self.updateValues(state_values, key_current, reward,
+                                      state_values, key_next)
+                if stateActionFlag:
+                    key_current = (str(tuple(state)), action)
+                    self.updateValues(state_action_values, key_current, reward,
+                                      state_values, key_next)
+
+        return state_values, state_action_values
+
+    def evaluate(self):
+        self.simulate()
+        self.state_values, self.state_action_values\
+            = self.getValueFunctions('mc')
 
 
 class Trainer:
@@ -58,7 +180,7 @@ class Trainer:
             players.append(LearnedPlayer(xId=i)
                            )
 
-        batch_player = BatchPlayer(players, self.size_of_board,
+        batch_player = MonteCarloSimulator(players, self.size_of_board,
                                    self.q_values,
                                    self.num_games)
         batch_player.run()
@@ -101,9 +223,9 @@ class Trainer:
         self.q_values_delta = {}
         for recording in self.game_recordings:
             value = 0  # reset the value at termination state to 0
-            for snapshot in reversed(recording):
-                _, state, action, score, state_next = snapshot
-                value += score
+            for step in reversed(recording):
+                _, state, action, reward, state_next = step
+                value += reward
 
                 key = (str(tuple(state)), action)
                 self.updateValues(self.q_values_delta, key, value)

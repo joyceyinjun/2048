@@ -8,14 +8,24 @@ from config import KEY_MAPPING, UNDO_STRING
 
 
 class Player:
+    """
+    an interface for all players
+    """
     def __init__(self, xScreen, xName, xId, xQC=False):
         self.name = xName
         self.id = xId
         self.screen = xScreen
         self.qc = xQC
 
+    def generateValidMove(self):
+        pass
+
 
 class HumanPlayer(Player):
+    """
+    a human player takes the move defined by
+    the input from keyboard
+    """
     def __init__(self, xScreen, xName='Dongdong', xId=0):
         super().__init__(xScreen, xName, xId)
 
@@ -31,6 +41,9 @@ class HumanPlayer(Player):
 
 
 class ComputerPlayer(Player):
+    """
+    an interface for all auto players
+    """
     def __init__(self, xScreen=None, xName='Mozart', xId=0, xQC=False):
         super().__init__(xScreen, xName, xId, xQC)
 
@@ -58,6 +71,10 @@ class ComputerPlayer(Player):
 
 
 class RandomPlayer(ComputerPlayer):
+    """
+    a random player picks a random move
+    among all that are allowed
+    """
     def __init__(self, xScreen=None, xName='Mozart', xId=0, xQC=False):
         super().__init__(xScreen, xName, xId, xQC)
 
@@ -70,6 +87,11 @@ class RandomPlayer(ComputerPlayer):
 
 
 class GreedyPlayer(ComputerPlayer):
+    """
+    a greedy player always makes the move that
+    maximizes the total score and results in
+    smallest number of blocks
+    """
     def __init__(self, xScreen=None, xName='Junjun', xId=0, xQC=False):
         super().__init__(xScreen, xName, xId, xQC)
 
@@ -100,6 +122,10 @@ class GreedyPlayer(ComputerPlayer):
 
 
 class LearnedPlayer(ComputerPlayer):
+    """
+    a learned player is able to decide on
+    actions given q values
+    """
     def __init__(self, xScreen=None, xName='Mozart', xId=0, xQC=False):
         super().__init__(xScreen, xName, xId, xQC)
 
@@ -115,13 +141,20 @@ class LearnedPlayer(ComputerPlayer):
             expected_return.append(value/count)
         return expected_return, confidence
 
-    def generateValidMove(self, xBoard, xQValues):
+    def generateValidMove(self, xBoard, xQValues, xMethod='thompson'):
         self.wait(self.qc)
         available_moves = xBoard.available_moves
         if not available_moves:
             return None
         if xQValues is None:
             return self.sampleFromList(available_moves)
+        expected_return, confidence = \
+            self.getStateQValues(xBoard.getSnapshot(), available_moves, xQValues)
+        # implemented thompson sampling
+        if xMethod.lower() == 'thompson':
+            return self.sampleFromList(available_moves,
+                                   expected_return, confidence)
+
 
         current_state = str(tuple(xBoard.getSnapshot()))
         expected_return, confidence = self.getStateQValues(
